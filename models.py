@@ -150,7 +150,7 @@ class NormalizingFlow(nn.Module):
 
         return nn.ModuleList(coupling_layers)
 
-    def forward(self, x):
+    def forward(self, x, return_ldj=False):
         log_det_jac = torch.zeros(x.shape[0], device=self.device)
 
         for block in range(self.n_blocks):
@@ -158,9 +158,12 @@ class NormalizingFlow(nn.Module):
             for coupling_layer in couplings:
                 x, log_det_jac = coupling_layer(x, log_det_jac)
 
-        return x, log_det_jac
+        if return_ldj:
+            return x, log_det_jac
+        else:
+            return x
 
-    def backward(self, x):
+    def backward(self, x, return_ldj=False):
         log_det_jac = torch.zeros(x.shape[0], device=self.device)
         
         for block in range(self.n_blocks):
@@ -169,10 +172,13 @@ class NormalizingFlow(nn.Module):
                 x, log_det_jac = coupling_layer(
                     x, log_det_jac, inverse=True)
 
-        return x, log_det_jac
+        if return_ldj:
+            return x, log_det_jac
+        else:
+            return x
 
     def log_prob(self, x):
-        z, log_det_jac = self.backward(x)
+        z, log_det_jac = self.backward(x, return_ldj=True)
         prior_ll = - 0.5 * torch.einsum('ki,ij,kj->k', z, self.prior_prec, z)
         prior_ll -= 0.5 * (self.dim * np.log(2 * np.pi) + self.prior_log_det)
 
@@ -185,7 +191,7 @@ class NormalizingFlow(nn.Module):
     def sample(self, n):
         z = self.prior_distrib.rsample(torch.Size([n, ])).to(self.device)
 
-        return self.forward(z)[0]
+        return self.forward(z)
 
 
 class MoG():
